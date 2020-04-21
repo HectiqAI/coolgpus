@@ -17,6 +17,7 @@ are a lot more distracting than steady fan noise.
 I can't claim it's optimal, but it Works For My Machine (TM). Full load is about 
 75C and 80%.
 ''')
+parser.add_argument('--const_speed', default=None, type=float, help='Set the fan to a fix speed.')
 parser.add_argument('--temp', nargs='+', default=[55, 80], type=float, help='The temperature ranges where the fan speed will increase linearly')
 parser.add_argument('--speed', nargs='+', default=[30, 99], type=float, help='The fan speed ranges')
 parser.add_argument('--hyst', nargs='?', default=2, type=float, help='The hysteresis gap. Large gaps will reduce how often the fan speed is changed, but might mean the fan runs faster than necessary')
@@ -25,9 +26,10 @@ args = parser.parse_args()
 
 T_HYST =  args.hyst
 
-assert len(args.temp) == len(args.speed), f'temp and speed should have the same length'
-assert len(args.temp) >= 2, f'Please use at least two points for temp'
-assert len(args.speed) >= 2, f'Please use at least two points for speed'
+#assert 0 < args.const_speed < 100, f'speed should be in the 0-100 range' 
+#assert len(args.temp) == len(args.speed), f'temp and speed should have the same length'
+#assert len(args.temp) >= 2, f'Please use at least two points for temp'
+#assert len(args.speed) >= 2, f'Please use at least two points for speed'
 
 # EDID for an arbitrary display
 EDID = b'\x00\xff\xff\xff\xff\xff\xff\x00\x10\xac\x15\xf0LTA5.\x13\x01\x03\x804 x\xee\x1e\xc5\xaeO4\xb1&\x0ePT\xa5K\x00\x81\x80\xa9@\xd1\x00qO\x01\x01\x01\x01\x01\x01\x01\x01(<\x80\xa0p\xb0#@0 6\x00\x06D!\x00\x00\x1a\x00\x00\x00\xff\x00C592M9B95ATL\n\x00\x00\x00\xfc\x00DELL U2410\n  \x00\x00\x00\xfd\x008L\x1eQ\x11\x00\n      \x00\x1d'
@@ -233,10 +235,30 @@ def manage_fans(displays):
             assign(display, '[gpu:0]/GPUFanControlState=0')
             print('Released fan speed control for GPU at '+display)
 
+def set_constant_speed(displays, const_speed):
+    speeds = {b: 0 for b in displays}
+    for bus, display in displays.items():
+        temp = temperature(bus)
+        s = const_speed
+
+        if const_speed > 0:
+            if s != speeds[bus]:
+                set_speed(display, s)
+                speeds[bus] = s
+            else:
+                pass
+        else:
+            for bus, display in displays.items():
+                assign(display, '[gpu:0]/GPUFanControlState=0')
+                print('Released fan speed control for GPU at '+display)
+
 def run():
     buses = gpu_buses() 
     with xservers(buses) as displays:
-        manage_fans(displays)
+        if args.const_speed:
+            set_constant_speed(displays, args.const_speed)
+        else:
+            manage_fans(displays)
 
 if __name__ == '__main__':
     run()
